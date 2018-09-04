@@ -39,8 +39,6 @@ public class Server {
 					accept(key);
 				} else if (key.isReadable()) {
 					read(key);
-				} else if (key.isWritable()) {
-					write(key);
 				}
 
 				keys.remove();//prevent a key from being handled twice
