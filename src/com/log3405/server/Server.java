@@ -28,9 +28,10 @@ public class Server {
 			int readyChannels = selector.select();
 			if(readyChannels == 0) continue;
 
-			Iterator keys = selector.keys().iterator();
+			Iterator keys = selector.selectedKeys().iterator();
 			while (keys.hasNext()) {
 				SelectionKey key = (SelectionKey) keys.next();
+				keys.remove();//prevent a key from being handled twice
 
 				if (!key.isValid()) {
 					continue;
@@ -40,8 +41,6 @@ public class Server {
 				} else if (key.isReadable()) {
 					read(key);
 				}
-
-				keys.remove();//prevent a key from being handled twice
 			}
 		}
 	}
@@ -53,6 +52,8 @@ public class Server {
 
 		dataMapper.put(channel, new ArrayList());
 		channel.register(selector, SelectionKey.OP_READ);
+
+		System.out.println("Client connected !");
 	}
 
 	private void read(SelectionKey key) throws IOException{
@@ -71,8 +72,8 @@ public class Server {
 		System.out.println("Received: " + new String(data));
 	}
 
-	private void write(SelectionKey key) throws IOException{
-
+	private void write(SocketChannel channel, ByteBuffer buffer) throws IOException{
+		channel.write(buffer);
 	}
 
 	private void setUpServerSocket(ServerSocketChannel serverChannel) throws IOException {
