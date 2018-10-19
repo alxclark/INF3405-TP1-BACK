@@ -1,83 +1,84 @@
 package com.log3405.server;
-import java.io.IOException;
-import java.net.InetSocketAddress;
+
+import java.io.*;
 import java.net.Socket;
-import java.nio.ByteBuffer;
-import java.nio.channels.*;
-import java.util.*;
+import java.net.SocketException;
 
-public class Server {
-	private Selector selector;
-	private Map<SocketChannel, List> dataMapper = new HashMap<>();
-	private InetSocketAddress serverAddress;
+public class Server extends Thread {
+	private Socket socket;
+	DataInputStream in;
+	DataOutputStream out;
 
-	public Server(String ipAddress, int port) {
-		serverAddress = new InetSocketAddress(ipAddress, port);
+	private final static int MAX_BUFFER_SIZE = 1024;
+
+	public Server(Socket socket) throws IOException {
+		this.socket = socket;
+		in = new DataInputStream(socket.getInputStream());
+		out = new DataOutputStream(socket.getOutputStream());
+		System.out.println("New client: " + socket.getRemoteSocketAddress().toString());
 	}
 
-	public void startServer() throws IOException {
-		this.selector = Selector.open();
-		ServerSocketChannel serverChannel = ServerSocketChannel.open();
-		serverChannel.configureBlocking(false);
+	public void run() {
+		try {
+			while (true) {
+				System.out.println("Begin run loop");
+				out.write("What do you want".getBytes());
 
-		setUpServerSocket(serverChannel);
+				byte[] received = readBytes(in);
+				byte[] response;
 
-		System.out.println("Server started...");
+				//decryptPacket
+				String packet = new String(received);
+				System.out.println(packet);
 
-		while (true) {
-			int readyChannels = selector.select();
-			if(readyChannels == 0) continue;
-
-			Iterator keys = selector.selectedKeys().iterator();
-			while (keys.hasNext()) {
-				SelectionKey key = (SelectionKey) keys.next();
-				keys.remove();//prevent a key from being handled twice
-
-				if (!key.isValid()) {
-					continue;
+				//process command sent
+				if ("bye".equals(packet)) {
+					socket.close();
+					response = null;
+				} else {
+					response = "Allo".getBytes();
 				}
-				if (key.isAcceptable()) {
-					accept(key);
-				} else if (key.isReadable()) {
-					read(key);
+
+				//write response if there is one
+				if (response == null) {
+					break;
+				} else {
+					out.write(response);
 				}
 			}
+
+		} catch (SocketException s) {
+			try {
+				socket.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			close(in, out);
 		}
 	}
 
-	private void accept(SelectionKey key) throws IOException{
-		ServerSocketChannel serverChannel = (ServerSocketChannel) key.channel();
-		SocketChannel channel = serverChannel.accept();
-		channel.configureBlocking(false);
+	private byte[] readBytes(InputStream in) throws IOException {
+		ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+		int nRead;
+		byte[] data = new byte[MAX_BUFFER_SIZE];
 
-		dataMapper.put(channel, new ArrayList());
-		channel.register(selector, SelectionKey.OP_READ);
-
-		System.out.println("Client connected !");
-	}
-
-	private void read(SelectionKey key) throws IOException{
-		SocketChannel channel = (SocketChannel) key.channel();
-		ByteBuffer buffer = ByteBuffer.allocate(1024);
-		int numRead =  channel.read(buffer);
-
-		if(numRead == -1){ //disconnect
-			this.dataMapper.remove(channel);
-			channel.close();
-			key.cancel();
-			return;
+		while ((nRead = in.read(data)) > 0) {
+			buffer.write(data, 0, nRead);
 		}
 
-		byte[] data = new byte[numRead];
-		System.out.println("Received: " + new String(data));
+		return buffer.toByteArray();
 	}
 
-	private void write(SocketChannel channel, ByteBuffer buffer) throws IOException{
-		channel.write(buffer);
-	}
-
-	private void setUpServerSocket(ServerSocketChannel serverChannel) throws IOException {
-		serverChannel.socket().bind(serverAddress);
-		serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+	private void close(InputStream in, OutputStream out) {
+		try {
+			in.close();
+			out.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 }
+

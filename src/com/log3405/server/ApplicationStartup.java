@@ -1,20 +1,33 @@
 package com.log3405.server;
 
 import java.io.IOException;
+import java.net.*;
 import java.util.Scanner;
+
+import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils.IO;
 
 public class ApplicationStartup {
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 		Scanner consoleInputReader = new Scanner(System.in);
 
 		String ipAddress = getIPAddress(consoleInputReader);
 		int port = getPort(consoleInputReader);
 
-		try {
-			new Server(ipAddress, port).startServer();
-		} catch (IOException e) {
-			e.printStackTrace();
+		ServerSocket listener = new ServerSocket();
+		InetAddress serverAdress = InetAddress.getByName(ipAddress);
+		listener.setReuseAddress(true);
+		listener.bind(new InetSocketAddress(serverAdress, port));
+
+		while (true) {//waits for new connections
+			try {
+				System.out.println("Waiting for a new connection ...");
+				Thread t = new Server(listener.accept());
+				t.start();
+			} catch (IOException e) {
+				listener.close();
+				e.printStackTrace();
+			}
 		}
 	}
 
