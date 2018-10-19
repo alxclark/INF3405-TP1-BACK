@@ -6,8 +6,8 @@ import java.net.SocketException;
 
 public class Server extends Thread {
 	private Socket socket;
-	DataInputStream in;
-	DataOutputStream out;
+	private DataInputStream in;
+	private DataOutputStream out;
 
 	private final static int MAX_BUFFER_SIZE = 1024;
 
@@ -21,8 +21,8 @@ public class Server extends Thread {
 	public void run() {
 		try {
 			while (true) {
-				System.out.println("Begin run loop");
-				out.write("What do you want".getBytes());
+				byte[] starter = "What do you want".getBytes();
+				writeBytes(starter);
 
 				byte[] received = readBytes(in);
 				byte[] response;
@@ -33,7 +33,7 @@ public class Server extends Thread {
 
 				//process command sent
 				if ("bye".equals(packet)) {
-					socket.close();
+					//socket.close();
 					response = null;
 				} else {
 					response = "Allo".getBytes();
@@ -43,12 +43,13 @@ public class Server extends Thread {
 				if (response == null) {
 					break;
 				} else {
-					out.write(response);
+					writeBytes(response);
 				}
 			}
 
 		} catch (SocketException s) {
 			try {
+				System.out.println("Closing thread and socket");
 				socket.close();
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -61,15 +62,15 @@ public class Server extends Thread {
 	}
 
 	private byte[] readBytes(InputStream in) throws IOException {
-		ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-		int nRead;
 		byte[] data = new byte[MAX_BUFFER_SIZE];
 
-		while ((nRead = in.read(data)) > 0) {
-			buffer.write(data, 0, nRead);
-		}
+		in.read(data, 0, data.length);
 
-		return buffer.toByteArray();
+		return data;
+	}
+
+	private void writeBytes(byte[] data) throws IOException {
+		out.write(data, 0, data.length);
 	}
 
 	private void close(InputStream in, OutputStream out) {
