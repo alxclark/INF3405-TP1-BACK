@@ -3,12 +3,16 @@ package com.log3405.server;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 public class Server extends Thread {
 	private Socket socket;
 	private DataInputStream in;
 	private DataOutputStream out;
+	private File currentDirectory;
 
+	private final static String ROOT_DIRECTORY = "Server/Storage";
 	private final static int MAX_BUFFER_SIZE = 1024;
 
 	public Server(Socket socket) throws IOException {
@@ -16,34 +20,56 @@ public class Server extends Thread {
 		in = new DataInputStream(socket.getInputStream());
 		out = new DataOutputStream(socket.getOutputStream());
 		System.out.println("New client: " + socket.getRemoteSocketAddress().toString());
+		currentDirectory = new File(ROOT_DIRECTORY);
+
+		byte[] starter = "Connected".getBytes();
+		writeBytes(starter);
 	}
 
 	public void run() {
 		try {
-			while (true) {
-				byte[] starter = "What do you want".getBytes();
-				writeBytes(starter);
-
+			exec: while (true) {
 				byte[] received = readBytes(in);
-				byte[] response;
 
-				//decryptPacket
-				String packet = new String(received);
-				System.out.println(packet);
+				// decryptPacket
+				byte[] packetType = Arrays.copyOfRange(received, 0, 4);
+				byte[] packetPayload = Arrays.copyOfRange(received, 4, received.length - 1);
 
-				//process command sent
-				if ("bye".equals(packet)) {
-					//socket.close();
-					response = null;
-				} else {
-					response = "Allo".getBytes();
-				}
+				int packetTypeAsInt = ByteBuffer.wrap(packetType).getInt();
 
-				//write response if there is one
-				if (response == null) {
-					break;
-				} else {
-					writeBytes(response);
+				switch(packetTypeAsInt) {
+					case 0: // CD
+						String newDirCD = new String(packetPayload).trim();
+						String messageCD = "Vous êtes dans le dossier " + newDirCD + ".";
+						writeBytes(messageCD.getBytes());
+						break;
+					case 1: // LS
+						listCurrentDirectory();
+						break;
+					case 2: // mkdir
+						// TODO
+						String newDirMK = new String(packetPayload).trim();
+						String messageMK = "Le dossier " + newDirMK + " a été créé.";
+						writeBytes(messageMK.getBytes());
+						break;
+					case 3: // UPLOAD
+						// TODO
+						String newFileName = new String(packetPayload).trim();
+						String messageUPLOAD = "Le fichier " + newFileName +" a bien été téléversé.";
+						writeBytes(messageUPLOAD.getBytes());
+						break;
+					case 4: // DOWNLOAD
+						// TODO
+						String downloadedFileName = new String(packetPayload).trim();
+						String messageDOWNLOAD = "Le fichier " + downloadedFileName +" a bien été téléchargé";
+						writeBytes(messageDOWNLOAD.getBytes());
+						break;
+					case 5: // EXIT
+						writeBytes("Vous avez été déconnecté avec succès.".getBytes());
+						// disconnect now ?
+						break exec;
+					default:
+						writeBytes("Unknown command. Possible commands are : ls, cd, mkdir, upload, download, exit".getBytes());
 				}
 			}
 
@@ -73,8 +99,28 @@ public class Server extends Thread {
 		out.write(data, 0, data.length);
 	}
 
+	private void listCurrentDirectory() throws IOException {
+		File[] directoryListing = currentDirectory.listFiles();
+		if (directoryListing != null) {
+			String response = "";
+			for (File child : directoryListing) {
+				if(child.isDirectory()) {
+					response += "[ FOLDER ] ";
+				} else {
+					response += "[ FILE ] ";
+				}
+				response += child.getName() + "\n";
+			}
+			writeBytes(response.getBytes());
+		} else {
+			// TODO: Handle the case where dir is not really a directory.
+		}
+	}
+
 	private void close(InputStream in, OutputStream out) {
 		try {
+			System.out.println("Closing socket and I/O streams");
+			socket.close();
 			in.close();
 			out.close();
 		} catch (IOException e) {
