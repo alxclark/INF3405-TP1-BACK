@@ -28,8 +28,9 @@ public class Server extends Thread {
 
 	public void run() {
 		try {
-			exec: while (true) {
-				byte[] received = readBytes(in);
+			exec:
+			while (true) {
+				byte[] received = readBytes(in, MAX_BUFFER_SIZE);
 
 				// decryptPacket
 				byte[] packetType = Arrays.copyOfRange(received, 0, 4);
@@ -37,19 +38,19 @@ public class Server extends Thread {
 
 				int packetTypeAsInt = ByteBuffer.wrap(packetType).getInt();
 
-				switch(packetTypeAsInt) {
+				switch (packetTypeAsInt) {
 					case 0: // CD
 						String newDirCD = new String(packetPayload).trim();
 						String messageCD;
 
-						if("..".equals(newDirCD)) {
+						if ("..".equals(newDirCD)) {
 							currentDirectory = currentDirectory.getParentFile();
 							messageCD = "Vous êtes dans le dossier " + currentDirectory.getName() + ".";
 						} else {
 							String newPath = currentDirectory.getPath() + '/' + newDirCD;
 							File newDirectory = new File(newPath);
 
-							if(newDirectory.isDirectory()) {
+							if (newDirectory.isDirectory()) {
 								currentDirectory = newDirectory;
 								messageCD = "Vous êtes dans le dossier " + currentDirectory.getName() + ".";
 							} else {
@@ -67,7 +68,7 @@ public class Server extends Thread {
 						String newDirMK = new String(packetPayload).trim();
 						String newPath = currentDirectory.getPath() + '/' + newDirMK;
 						String messageMK;
-						if(new File(newPath).mkdir()) {
+						if (new File(newPath).mkdir()) {
 							messageMK = "Le dossier " + newDirMK + " a été créé.";
 						} else {
 							messageMK = "Il y a eu une erreur lors de la creation de ce dossier";
@@ -76,14 +77,34 @@ public class Server extends Thread {
 						break;
 					case 3: // UPLOAD
 						// TODO
-						String newFileName = new String(packetPayload).trim();
-						String messageUPLOAD = "Le fichier " + newFileName +" a bien été téléversé.";
+						byte[] fileLengthPayload = Arrays.copyOfRange(packetPayload, 0, 4);
+						byte[] fileNamePayload = Arrays.copyOfRange(packetPayload, 4, packetPayload.length);
+						String newFileName = new String(fileNamePayload).trim();
+						int fileLengthAsInt = ByteBuffer.wrap(fileLengthPayload).getInt();
+						String messageMidUpload = "Ready to read:" + fileLengthAsInt + " bytes";
+						writeBytes(messageMidUpload.getBytes());
+
+						byte[] file = readBytes(in, fileLengthAsInt);
+						String messageUPLOAD;
+
+						File newFile = new File(currentDirectory.getPath() + '/' + newFileName);
+
+						try (FileOutputStream fos = new FileOutputStream(newFile.getPath())) {
+							if (!newFile.exists()) {
+								newFile.createNewFile();
+							}
+							fos.write(file);
+							messageUPLOAD = "Le fichier " + newFileName + " a bien été téléversé.";
+						} catch (IOException e) {
+							messageUPLOAD = "Une erreur est arrivee lors du televersement du fichier";
+						}
+
 						writeBytes(messageUPLOAD.getBytes());
 						break;
 					case 4: // DOWNLOAD
 						// TODO
 						String downloadedFileName = new String(packetPayload).trim();
-						String messageDOWNLOAD = "Le fichier " + downloadedFileName +" a bien été téléchargé";
+						String messageDOWNLOAD = "Le fichier " + downloadedFileName + " a bien été téléchargé";
 						writeBytes(messageDOWNLOAD.getBytes());
 						break;
 					case 5: // EXIT
@@ -94,7 +115,6 @@ public class Server extends Thread {
 						writeBytes("Unknown command. Possible commands are : ls, cd, mkdir, upload, download, exit".getBytes());
 				}
 			}
-
 		} catch (SocketException s) {
 			try {
 				System.out.println("Closing thread and socket");
@@ -109,8 +129,8 @@ public class Server extends Thread {
 		}
 	}
 
-	private byte[] readBytes(InputStream in) throws IOException {
-		byte[] data = new byte[MAX_BUFFER_SIZE];
+	private byte[] readBytes(InputStream in, int bufferSize) throws IOException {
+		byte[] data = new byte[bufferSize];
 
 		in.read(data, 0, data.length);
 
@@ -126,14 +146,14 @@ public class Server extends Thread {
 		if (directoryListing != null) {
 			String response = "";
 			for (File child : directoryListing) {
-				if(child.isDirectory()) {
+				if (child.isDirectory()) {
 					response += "[ FOLDER ] ";
 				} else {
 					response += "[ FILE ] ";
 				}
 				response += child.getName() + "\n";
 			}
-			if("".equals(response)) {
+			if ("".equals(response)) {
 				writeBytes("[ EMPTY ]".getBytes());
 			} else {
 				writeBytes(response.getBytes());
