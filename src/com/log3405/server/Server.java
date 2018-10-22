@@ -3,8 +3,8 @@ package com.log3405.server;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
+import java.nio.file.Files;
+import java.time.LocalDateTime;
 
 public class Server extends Thread {
 	private Socket socket;
@@ -19,28 +19,30 @@ public class Server extends Thread {
 		this.socket = socket;
 		in = new DataInputStream(socket.getInputStream());
 		out = new DataOutputStream(socket.getOutputStream());
-		System.out.println("New client: " + socket.getRemoteSocketAddress().toString());
+		System.out.println("[" + socket.getRemoteSocketAddress().toString() + " - " + LocalDateTime.now() + "]: Connected");
 		currentDirectory = new File(ROOT_DIRECTORY);
 
 		byte[] starter = "Connected".getBytes();
-		writeBytes(starter);
+		BytesUtils.writeBytes(out, starter);
 	}
 
 	public void run() {
 		try {
 			exec:
 			while (true) {
-				byte[] received = readBytes(in, MAX_BUFFER_SIZE);
+				byte[] received = BytesUtils.readBytes(in, MAX_BUFFER_SIZE);
 
 				// decryptPacket
-				byte[] packetType = Arrays.copyOfRange(received, 0, 4);
-				byte[] packetPayload = Arrays.copyOfRange(received, 4, received.length - 1);
+				byte[] packetType = BytesUtils.extractSubByteArray(received, 0, 4);
+				byte[] packetPayload = BytesUtils.extractSubByteArray(received, 4, received.length - 1);
 
-				int packetTypeAsInt = ByteBuffer.wrap(packetType).getInt();
+				int packetTypeAsInt = BytesUtils.bytesToInt(packetType);
+				System.out.print("[" + socket.getRemoteSocketAddress().toString() + " - " + LocalDateTime.now() + "]: ");
 
 				switch (packetTypeAsInt) {
 					case 0: // CD
-						String newDirCD = new String(packetPayload).trim();
+						System.out.println("cd " + BytesUtils.bytesToString(packetPayload));
+						String newDirCD = BytesUtils.bytesToString(packetPayload);
 						String messageCD;
 
 						if ("..".equals(newDirCD)) {
@@ -57,15 +59,16 @@ public class Server extends Thread {
 								messageCD = "Ce dossier n'existe pas.";
 							}
 						}
-						writeBytes(messageCD.getBytes());
+						BytesUtils.writeBytes(out, messageCD.getBytes());
 
 						break;
 					case 1: // LS
+						System.out.println("ls");
 						listCurrentDirectory();
 						break;
 					case 2: // mkdir
-						// TODO
-						String newDirMK = new String(packetPayload).trim();
+						System.out.println("mkdir " + BytesUtils.bytesToString(packetPayload));
+						String newDirMK = BytesUtils.bytesToString(packetPayload);
 						String newPath = currentDirectory.getPath() + '/' + newDirMK;
 						String messageMK;
 						if (new File(newPath).mkdir()) {
@@ -73,18 +76,19 @@ public class Server extends Thread {
 						} else {
 							messageMK = "Il y a eu une erreur lors de la creation de ce dossier";
 						}
-						writeBytes(messageMK.getBytes());
+						BytesUtils.writeBytes(out, messageMK.getBytes());
 						break;
 					case 3: // UPLOAD
-						// TODO
-						byte[] fileLengthPayload = Arrays.copyOfRange(packetPayload, 0, 4);
-						byte[] fileNamePayload = Arrays.copyOfRange(packetPayload, 4, packetPayload.length);
-						String newFileName = new String(fileNamePayload).trim();
-						int fileLengthAsInt = ByteBuffer.wrap(fileLengthPayload).getInt();
-						String messageMidUpload = "Ready to read:" + fileLengthAsInt + " bytes";
-						writeBytes(messageMidUpload.getBytes());
+						byte[] fileLengthPayload = BytesUtils.extractSubByteArray(packetPayload, 0, 4);
+						byte[] fileNamePayload = BytesUtils.extractSubByteArray(packetPayload, 4, packetPayload.length - 1);
+						System.out.println("upload " + BytesUtils.bytesToString(fileNamePayload));
 
-						byte[] file = readBytes(in, fileLengthAsInt);
+						String newFileName = BytesUtils.bytesToString(fileNamePayload);
+						int fileLengthAsInt = BytesUtils.bytesToInt(fileLengthPayload);
+						String messageMidUpload = "Ready to read:" + fileLengthAsInt + " bytes";
+						BytesUtils.writeBytes(out, messageMidUpload.getBytes());
+
+						byte[] file = BytesUtils.readBytes(in, fileLengthAsInt);
 						String messageUPLOAD;
 
 						File newFile = new File(currentDirectory.getPath() + '/' + newFileName);
@@ -99,20 +103,41 @@ public class Server extends Thread {
 							messageUPLOAD = "Une erreur est arrivee lors du televersement du fichier";
 						}
 
-						writeBytes(messageUPLOAD.getBytes());
+						BytesUtils.writeBytes(out, messageUPLOAD.getBytes());
 						break;
 					case 4: // DOWNLOAD
-						// TODO
-						String downloadedFileName = new String(packetPayload).trim();
-						String messageDOWNLOAD = "Le fichier " + downloadedFileName + " a bien été téléchargé";
-						writeBytes(messageDOWNLOAD.getBytes());
+						String targetFileName = BytesUtils.bytesToString(packetPayload);
+						System.out.println("download " + targetFileName);
+						File targetFile = new File(currentDirectory.getPath() + '/' + targetFileName);
+						if (targetFile.exists()) {
+							byte[] fileStatus = BytesUtils.intToBytes(0);
+							byte[] filePayload = Files.readAllBytes(targetFile.toPath());
+							byte[] dFileLengthPayload = BytesUtils.intToBytes(filePayload.length);
+							byte[] dFileNamePayload = targetFile.getName().getBytes();
+							byte[] tempPacket = BytesUtils.concat(fileStatus, dFileLengthPayload);
+							byte[] finalPacket = BytesUtils.concat(tempPacket, dFileNamePayload);
+
+							BytesUtils.writeBytes(out, finalPacket);
+							System.out.println("[" + socket.getRemoteSocketAddress().toString() + " - " + LocalDateTime.now() + "]:");
+							System.out.println(
+									BytesUtils.bytesToString(BytesUtils.readBytes(in, MAX_BUFFER_SIZE)));//read until client is ready to handle the file
+							BytesUtils.writeBytes(out, filePayload);
+						} else {
+							byte[] fileStatus = BytesUtils.intToBytes(1);
+							byte[] responsePayload = ("File " + targetFile.getName() + " does not exists").getBytes();
+							byte[] finalPacket = BytesUtils.concat(fileStatus, responsePayload);
+
+							BytesUtils.writeBytes(out, finalPacket);
+						}
+
 						break;
 					case 5: // EXIT
-						writeBytes("Vous avez été déconnecté avec succès.".getBytes());
+						System.out.println("exit");
+						BytesUtils.writeBytes(out, "Vous avez été déconnecté avec succès.".getBytes());
 						// disconnect now ?
 						break exec;
 					default:
-						writeBytes("Unknown command. Possible commands are : ls, cd, mkdir, upload, download, exit".getBytes());
+						BytesUtils.writeBytes(out, "Unknown command. Possible commands are : ls, cd, mkdir, upload, download, exit".getBytes());
 				}
 			}
 		} catch (SocketException s) {
@@ -129,18 +154,6 @@ public class Server extends Thread {
 		}
 	}
 
-	private byte[] readBytes(InputStream in, int bufferSize) throws IOException {
-		byte[] data = new byte[bufferSize];
-
-		in.read(data, 0, data.length);
-
-		return data;
-	}
-
-	private void writeBytes(byte[] data) throws IOException {
-		out.write(data, 0, data.length);
-	}
-
 	private void listCurrentDirectory() throws IOException {
 		File[] directoryListing = currentDirectory.listFiles();
 		if (directoryListing != null) {
@@ -154,12 +167,12 @@ public class Server extends Thread {
 				response += child.getName() + "\n";
 			}
 			if ("".equals(response)) {
-				writeBytes("[ EMPTY ]".getBytes());
+				BytesUtils.writeBytes(out, "[ EMPTY ]".getBytes());
 			} else {
-				writeBytes(response.getBytes());
+				BytesUtils.writeBytes(out, response.getBytes());
 			}
 		} else {
-			writeBytes("There was an error with this directory".getBytes());
+			BytesUtils.writeBytes(out, "There was an error with this directory".getBytes());
 		}
 	}
 
