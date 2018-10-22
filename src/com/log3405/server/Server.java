@@ -40,8 +40,24 @@ public class Server extends Thread {
 				switch(packetTypeAsInt) {
 					case 0: // CD
 						String newDirCD = new String(packetPayload).trim();
-						String messageCD = "Vous êtes dans le dossier " + newDirCD + ".";
+						String messageCD;
+
+						if("..".equals(newDirCD)) {
+							currentDirectory = currentDirectory.getParentFile();
+							messageCD = "Vous êtes dans le dossier " + currentDirectory.getName() + ".";
+						} else {
+							String newPath = currentDirectory.getPath() + '/' + newDirCD;
+							File newDirectory = new File(newPath);
+
+							if(newDirectory.isDirectory()) {
+								currentDirectory = newDirectory;
+								messageCD = "Vous êtes dans le dossier " + currentDirectory.getName() + ".";
+							} else {
+								messageCD = "Ce dossier n'existe pas.";
+							}
+						}
 						writeBytes(messageCD.getBytes());
+
 						break;
 					case 1: // LS
 						listCurrentDirectory();
@@ -49,7 +65,13 @@ public class Server extends Thread {
 					case 2: // mkdir
 						// TODO
 						String newDirMK = new String(packetPayload).trim();
-						String messageMK = "Le dossier " + newDirMK + " a été créé.";
+						String newPath = currentDirectory.getPath() + '/' + newDirMK;
+						String messageMK;
+						if(new File(newPath).mkdir()) {
+							messageMK = "Le dossier " + newDirMK + " a été créé.";
+						} else {
+							messageMK = "Il y a eu une erreur lors de la creation de ce dossier";
+						}
 						writeBytes(messageMK.getBytes());
 						break;
 					case 3: // UPLOAD
@@ -111,9 +133,13 @@ public class Server extends Thread {
 				}
 				response += child.getName() + "\n";
 			}
-			writeBytes(response.getBytes());
+			if("".equals(response)) {
+				writeBytes("[ EMPTY ]".getBytes());
+			} else {
+				writeBytes(response.getBytes());
+			}
 		} else {
-			// TODO: Handle the case where dir is not really a directory.
+			writeBytes("There was an error with this directory".getBytes());
 		}
 	}
 
