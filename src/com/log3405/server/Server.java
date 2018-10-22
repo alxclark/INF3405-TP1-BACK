@@ -40,7 +40,7 @@ public class Server extends Thread {
 				System.out.print("[" + socket.getRemoteSocketAddress().toString() + " - " + LocalDateTime.now() + "]: ");
 
 				switch (packetTypeAsInt) {
-					case 0: // CD
+					case 0: {// CD
 						System.out.println("cd " + BytesUtils.bytesToString(packetPayload));
 						String newDirCD = BytesUtils.bytesToString(packetPayload);
 						String messageCD;
@@ -62,11 +62,13 @@ public class Server extends Thread {
 						BytesUtils.writeBytes(out, messageCD.getBytes());
 
 						break;
-					case 1: // LS
+					}
+					case 1: {// LS
 						System.out.println("ls");
 						listCurrentDirectory();
 						break;
-					case 2: // mkdir
+					}
+					case 2: { // mkdir
 						System.out.println("mkdir " + BytesUtils.bytesToString(packetPayload));
 						String newDirMK = BytesUtils.bytesToString(packetPayload);
 						String newPath = currentDirectory.getPath() + '/' + newDirMK;
@@ -78,7 +80,8 @@ public class Server extends Thread {
 						}
 						BytesUtils.writeBytes(out, messageMK.getBytes());
 						break;
-					case 3: // UPLOAD
+					}
+					case 3: {// UPLOAD
 						byte[] fileLengthPayload = BytesUtils.extractSubByteArray(packetPayload, 0, 4);
 						byte[] fileNamePayload = BytesUtils.extractSubByteArray(packetPayload, 4, packetPayload.length - 1);
 						System.out.println("upload " + BytesUtils.bytesToString(fileNamePayload));
@@ -105,7 +108,8 @@ public class Server extends Thread {
 
 						BytesUtils.writeBytes(out, messageUPLOAD.getBytes());
 						break;
-					case 4: // DOWNLOAD
+					}
+					case 4: {// DOWNLOAD
 						String targetFileName = BytesUtils.bytesToString(packetPayload);
 						System.out.println("download " + targetFileName);
 						File targetFile = new File(currentDirectory.getPath() + '/' + targetFileName);
@@ -131,13 +135,13 @@ public class Server extends Thread {
 						}
 
 						break;
-					case 5: // EXIT
+					}
+					case 5: {// EXIT
 						System.out.println("exit");
 						BytesUtils.writeBytes(out, "Vous avez été déconnecté avec succès.".getBytes());
 						// disconnect now ?
 						break exec;
-					default:
-						BytesUtils.writeBytes(out, "Unknown command. Possible commands are : ls, cd, mkdir, upload, download, exit".getBytes());
+					}
 				}
 			}
 		} catch (SocketException s) {
