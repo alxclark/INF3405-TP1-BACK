@@ -30,11 +30,11 @@ public class Server extends Thread {
 		try {
 			exec:
 			while (true) {
-				byte[] received = BytesUtils.readBytes(in, MAX_BUFFER_SIZE);
+				byte[] received = BytesUtils.readBytes(in, MAX_BUFFER_SIZE, false);
 
 				// decryptPacket
 				byte[] packetType = BytesUtils.extractSubByteArray(received, 0, 4);
-				byte[] packetPayload = BytesUtils.extractSubByteArray(received, 4, received.length - 1);
+				byte[] packetPayload = BytesUtils.extractSubByteArray(received, 4, received.length);
 
 				int packetTypeAsInt = BytesUtils.bytesToInt(packetType);
 				System.out.print("[" + socket.getRemoteSocketAddress().toString() + " - " + LocalDateTime.now() + "]: ");
@@ -83,7 +83,7 @@ public class Server extends Thread {
 					}
 					case 3: {// UPLOAD
 						byte[] fileLengthPayload = BytesUtils.extractSubByteArray(packetPayload, 0, 4);
-						byte[] fileNamePayload = BytesUtils.extractSubByteArray(packetPayload, 4, packetPayload.length - 1);
+						byte[] fileNamePayload = BytesUtils.extractSubByteArray(packetPayload, 4, packetPayload.length);
 						System.out.println("upload " + BytesUtils.bytesToString(fileNamePayload));
 
 						String newFileName = BytesUtils.bytesToString(fileNamePayload);
@@ -91,7 +91,7 @@ public class Server extends Thread {
 						String messageMidUpload = "Ready to read:" + fileLengthAsInt + " bytes";
 						BytesUtils.writeBytes(out, messageMidUpload.getBytes());
 
-						byte[] file = BytesUtils.readBytes(in, fileLengthAsInt);
+						byte[] file = BytesUtils.readBytes(in, fileLengthAsInt, true);
 						String messageUPLOAD;
 
 						File newFile = new File(currentDirectory.getPath() + '/' + newFileName);
@@ -124,7 +124,7 @@ public class Server extends Thread {
 							BytesUtils.writeBytes(out, finalPacket);
 							System.out.println("[" + socket.getRemoteSocketAddress().toString() + " - " + LocalDateTime.now() + "]:");
 							System.out.println(
-									BytesUtils.bytesToString(BytesUtils.readBytes(in, MAX_BUFFER_SIZE)));//read until client is ready to handle the file
+									BytesUtils.bytesToString(BytesUtils.readBytes(in, MAX_BUFFER_SIZE, false)));//read until client is ready to handle the file
 							BytesUtils.writeBytes(out, filePayload);
 						} else {
 							byte[] fileStatus = BytesUtils.intToBytes(1);

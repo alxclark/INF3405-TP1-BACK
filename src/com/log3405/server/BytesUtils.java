@@ -5,10 +5,13 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 public class BytesUtils {
-	public static byte[] readBytes(InputStream in, int bufferSize) throws IOException {
+	public static byte[] readBytes(InputStream in, int bufferSize, boolean fullRead) throws IOException {
 		byte[] data = new byte[bufferSize];
 
-		in.read(data, 0, data.length);
+		int read = in.read(data, 0, data.length);
+		while (fullRead && read < bufferSize) {
+			read += in.read(data, read, data.length - read);//sometimes its partial try again
+		}
 
 		return data;
 	}
